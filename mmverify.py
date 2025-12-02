@@ -547,7 +547,7 @@ class MM:
             else:
                 raise MMError(f"No statement information found for label {label}")
         return stack
-    
+
     def treat_compressed_proof(
             self,
             f_hyps: list[Fhyp],
