@@ -40,6 +40,8 @@ import io
 Label = str
 Var = str
 Const = str
+Step = str
+CompressedSteps = str
 Stmttype = typing.Literal["$c", "$v", "$f", "$e", "$a", "$p", "$d", "$="]
 StringOption = typing.Optional[str]
 Symbol = typing.Union[Var, Const]
@@ -47,6 +49,7 @@ Stmt = list[Symbol]
 Ehyp = Stmt
 Fhyp = tuple[Const, Var]
 Dv = tuple[Var, Var]
+Proof = typing.Union[list[Step], tuple[list[Step], list[CompressedSteps]]]
 Assertion = tuple[set[Dv], list[Fhyp], list[Ehyp], Stmt]
 FullStmt = tuple[Stmttype, typing.Union[Stmt, Assertion]]
 
@@ -304,6 +307,7 @@ class MM:
         self.constants: set[Const] = set()
         self.fs = FrameStack()
         self.labels: dict[Label, FullStmt] = {}
+        self.proofs: dict[Label, Proof] = {}
         self.begin_label = begin_label
         self.stop_label = stop_label
         self.verify_proofs = not self.begin_label
@@ -445,6 +449,7 @@ class MM:
                     vprint(2, 'Verify:', label)
                     self.verify(f_hyps, e_hyps, conclusion, proof)
                 self.labels[label] = ('$p', (dvs, f_hyps, e_hyps, conclusion))
+                self.proofs[label] = proof
                 label = None
             elif tok == '$d':
                 self.fs.add_d(self.read_non_p_stmt(tok, toks))
