@@ -681,6 +681,66 @@ class ToMeTTa:
         self.token_to_metta['<->'] = '↔'    # iff (U+2194, \leftrightarrow)
         self.token_to_metta['if-'] = '?:'   # if-then-else
 
+    def token_list_to_tree(self, tokens: list[str]) -> list[any]:
+        """Convert a list of tokens with parentheses into a tree.
+
+        Strip parentheses and use nested lists instead.  For instance
+
+        token_list_to_tree(['(', 'ph', '->', '(', 'ps', '<->', 'ch', ')', ')'])
+
+        outputs
+
+        [['ph', '->', ['ps', '<->', 'ch']]]
+        """
+
+        # Code produced by Duck.ai
+        #
+        # Explanation
+        #
+        # - The function convert_to_nested_list takes a list of tokens
+        #   as input and initializes an empty stack and result list.
+        #
+        # - It then iterates over each token in the input list.
+        #
+        # - When it encounters an open parenthesis (, it pushes the
+        #   current result list onto the stack and starts a new
+        #   sublist.
+        #
+        # - When it encounters a close parenthesis ), it pops the last
+        #   sublist from the stack, appends the current sublist to it,
+        #   and updates the result.
+        #
+        # - For any other token, it simply appends it to the current
+        #   sublist.
+        #
+        # - Finally, it checks if there are any remaining open
+        #   parentheses (i.e., a non-empty stack) and raises a
+        #   ValueError if there are.
+        #
+        # * The function returns the resulting nested list.
+        stack = []
+        result = []
+
+        for token in tokens:
+            if token == '(':
+                # Start a new sublist when encountering an open parenthesis
+                stack.append(result)
+                result = []
+            elif token == ')':
+                # End the current sublist when encountering a close parenthesis
+                if not stack:
+                    raise ValueError("Mismatched parentheses")
+                sublist = result
+                result = stack.pop()
+                result.append(sublist)
+            else:
+                # Append the token to the current sublist
+                result.append(token)
+
+        if stack:
+            raise ValueError("Mismatched parentheses")
+
+        return result
 
 if __name__ == '__main__':
     """Parse the arguments and verify the given Metamath database."""
