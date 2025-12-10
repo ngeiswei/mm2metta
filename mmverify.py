@@ -681,19 +681,45 @@ class ToMeTTa:
         self.token_to_metta['<->'] = '↔'    # iff (U+2194, \leftrightarrow)
         self.token_to_metta['if-'] = '?:'   # if-then-else
 
-    def token_list_to_tree(self, tokens: list[str]) -> list[any]:
-        """Convert a list of tokens with parentheses into a tree.
+    def tokens_to_ast(self, tokens: list[str]) -> list[any]:
+        """Convert a list of tokens with parentheses to a syntax tree.
 
         Strip parentheses and use nested lists instead.  For instance
 
-        token_list_to_tree(['(', 'ph', '->', '(', 'ps', '<->', 'ch', ')', ')'])
+        tokens_to_ast(['(', 'ph', '->', '(', 'ps', '<->', 'ch', ')', ')'])
 
         outputs
 
         [['ph', '->', ['ps', '<->', 'ch']]]
+
+        Additionally treat negation '-.' as if it were surrounded by
+        parentheses.  For instance
+
+        tokens_to_ast(['(', 'ph', '->', '-.', 'ps', ')'])
+
+        outputs
+
+        [['ph', '->', ['-.', 'ps']]]
+
+        It also supports nested negations.  For instance
+
+        tokens_to_ast(['(', 'ph', '->', '-.', '-.', 'ps', ')'])
+
+        outputs
+
+        [['ph', '->', ['-.', ['-.', 'ps']]]]
+
+        Or for instance
+
+        tokens_to_ast(['-.', '-.', '(', 'ph', '->', 'ps', ')'])
+
+        outputs
+
+        [['-.', ['-.', ['ph', '->', 'ps']]]]
+
         """
 
-        # Code produced by Duck.ai
+        # Code produced by Duck.ai then improved by myself to support negation
         #
         # Explanation
         #
@@ -719,28 +745,78 @@ class ToMeTTa:
         #
         # * The function returns the resulting nested list.
         stack = []
-        result = []
+        result = [], False      # The flag indicates a negation
 
         for token in tokens:
             if token == '(':
                 # Start a new sublist when encountering an open parenthesis
                 stack.append(result)
-                result = []
+                result = [], False
             elif token == ')':
                 # End the current sublist when encountering a close parenthesis
                 if not stack:
                     raise ValueError("Mismatched parentheses")
-                sublist = result
-                result = stack.pop()
-                result.append(sublist)
+                top_result, top_flag = stack.pop()
+                top_result.append(result[0])
+                result = top_result, top_flag
+                while result[1]:   # Take care of negation
+                    top_result, top_flag = stack.pop()
+                    top_result.append(result[0])
+                    result = top_result, top_flag
+            elif token == '-.':
+                # Start a new sublist with negation when encountering a negation
+                stack.append(result)
+                result = [token], True
             else:
                 # Append the token to the current sublist
-                result.append(token)
+                result[0].append(token)
+                while result[1]:   # Take care of negation
+                    top_result, top_flag = stack.pop()
+                    top_result.append(result[0])
+                    result = top_result, top_flag
 
         if stack:
             raise ValueError("Mismatched parentheses")
 
-        return result
+        return result[0]
+
+    def ast_to_metta(self, ast: list[any]) -> str:
+        """Convert a metamath proposition as nested list into a MeTTa S-expression.
+
+        For instance
+
+        ast_to_metta(['ph', '->', ['ps', '<->', 'ch']])
+
+        outputs
+
+        "(→ $𝜙 ($𝜓 ↔ $𝜒))"
+        """
+
+        # Token
+        if isinstance(ast, str):
+            return self.token_to_metta[ast]
+
+        # Tree
+        arity = len(ast)
+        if arity == 0:
+            return ""
+        if arity == 1:
+            child = ast[0]
+            return "({})".format(self.ast_to_metta(child))
+        if arity == 2:
+            left = ast[0]      # NEXT: take care of whether it is a tree
+            right = ast[1]     # NEXT: take care of whether it is a tree
+            return "({} {})".format(self.ast_to_metta(left),
+                                    self.ast_to_metta(right))
+        if arity == 3:
+            left = ast[0]
+            center = ast[1]    # Assumed to be an infix connector
+            right = ast[2]
+            return "({} {} {})".format(self.ast_to_metta(center),
+                                       self.ast_to_metta(left),
+                                       self.ast_to_metta(right))
+        raise ValueError("Arity greater than 3 not supported")
+
 
 if __name__ == '__main__':
     """Parse the arguments and verify the given Metamath database."""
