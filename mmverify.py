@@ -52,6 +52,7 @@ Dv = tuple[Var, Var]
 Proof = typing.Union[list[Step], tuple[list[Step], list[CompressedSteps]]]
 Assertion = tuple[set[Dv], list[Fhyp], list[Ehyp], Stmt]
 FullStmt = tuple[Stmttype, typing.Union[Stmt, Assertion]]
+MeTTa = str
 
 def is_hypothesis(stmt: FullStmt) -> typing.TypeGuard[tuple[Stmttype, Stmt]]:
     """The second component of a FullStmt is a Stmt when its first
@@ -652,7 +653,10 @@ class MM:
 class ToMeTTa:
     """Class containing methods to convert MetaMath to MeTTa."""
 
-    def __init__(self) -> None:
+    def __init__(self, mm: MM) -> None:
+        # Store reference of MM object
+        self.mm = mm
+
         # Mapping between metamath tokens and MeTTa
         self.token_to_metta: dict[str, str] = {}
 
@@ -780,7 +784,7 @@ class ToMeTTa:
 
         return result[0]
 
-    def ast_to_metta(self, ast: list[any]) -> str:
+    def ast_to_metta(self, ast: list[any]) -> MeTTa:
         """Convert a metamath proposition as nested list into a MeTTa S-expression.
 
         For instance
@@ -789,7 +793,7 @@ class ToMeTTa:
 
         outputs
 
-        "(→ $𝜙 ($𝜓 ↔ $𝜒))"
+        "(→ $𝜑 ($𝜓 ↔ $𝜒))"
         """
 
         # Token
@@ -804,8 +808,8 @@ class ToMeTTa:
             child = ast[0]
             return "({})".format(self.ast_to_metta(child))
         if arity == 2:
-            left = ast[0]      # NEXT: take care of whether it is a tree
-            right = ast[1]     # NEXT: take care of whether it is a tree
+            left = ast[0]
+            right = ast[1]
             return "({} {})".format(self.ast_to_metta(left),
                                     self.ast_to_metta(right))
         if arity == 3:
@@ -816,6 +820,214 @@ class ToMeTTa:
                                        self.ast_to_metta(left),
                                        self.ast_to_metta(right))
         raise ValueError("Arity greater than 3 not supported")
+
+    def stmt_to_metta(self, tokens: Stmt) -> MeTTa:
+        """Convert a statement as list of tokens to MeTTa S-expression.
+
+        For instance
+
+        stmt_to_metta(['|-', '(', 'ph', '->', 'ps', ')'])
+
+        outputs
+
+        "(→ $𝜑 $𝜓)"
+
+        """
+
+        # Convert token list to AST
+        ast = self.tokens_to_ast(tokens)
+
+        # Convert AST to MeTTa, possibly dropping '|-'
+        return self.ast_to_metta(ast[1] if ast[0] == '|-' else ast)
+
+    def assertion_to_metta(self, asrt: Assertion) -> MeTTa:
+        """Convert Assertion to MeTTa S-expression.
+
+        For instance
+
+        assertion_to_metta((set(),
+                            [('wff', 'ph'), ('wff', 'ps')],
+                            [['|-', 'ph'], ['|-', '(', 'ph', '->', 'ps', ')']],
+                            ['|-', 'ps']))
+
+        outputs
+
+        (-> $𝜑 (→ $𝜑 $𝜓) $𝜓)
+
+        For now disjoint variables and floating hypotheses are
+        ignored.
+
+        """
+        hypotheses = asrt[2]
+        conclusion = asrt[3]
+        hmtas = [self.stmt_to_metta(h) for h in hypotheses]
+        cmta = self.stmt_to_metta(conclusion)
+
+        if len(hmtas) == 0:
+            return cmta
+        return "(-> {} {})".format(" ".join(hmtas), cmta)
+
+    def fullstmt_to_metta(self, flstmt: FullStmt) -> MeTTa:
+        """Convert full statement to MeTTa.
+
+        For instance
+
+        fullstmt_to_metta(('$a',
+                           (set(),
+                            [('wff', 'ph'), ('wff', 'ps')],
+                            [['|-', 'ph'], ['|-', '(', 'ph', '->', 'ps', ')']],
+                            ['|-', 'ps'])))
+
+        outputs
+
+        (-> $𝜑 (→ $𝜑 $𝜓) $𝜓)
+
+        """
+        if is_assertion(flstmt):
+            return self.assertion_to_metta(flstmt[1])
+        raise ValueError("Not supported")
+
+    def axiom_to_metta(self, label: Label, flstmt: FullStmt) -> MeTTa:
+        """Convert axiom definition to MeTTa.
+
+        For instance
+
+        axiom_to_metta("ax-mp", (set(),
+                                 [('wff', 'ph'), ('wff', 'ps')],
+                                 [['|-', 'ph'], ['|-', '(', 'ph', '->', 'ps', ')']],
+                                 ['|-', 'ps']))
+
+        outputs
+
+        (: ax-mp (-> $𝜑 (→ $𝜑 $𝜓) $𝜓))
+
+        """
+        return "(: {} {})".format(label, self.fullstmt_to_metta(flstmt))
+
+    def get_arity(self, label: Label) -> int:
+        """Get the arity of whatever is associated to the given label.
+
+        For instance
+
+        get_arity("ax-mp") = 2
+
+        because ax-mp is an axiom with two essential hypotheses.
+
+        """
+        flstmt = self.mm.labels[label]
+        if is_hypothesis(flstmt):
+            return 0
+        if is_assertion(flstmt):
+            return len(flstmt[1][2])
+
+    def is_about_wff(self, label: Label) -> bool:
+        """Return True iff the label is about a wff assertion"""
+        flstmt = self.mm.labels[label]
+        if is_hypothesis(flstmt):
+            return flstmt[1][0] == 'wff'
+        if is_assertion(flstmt):
+            return flstmt[1][3][0] == 'wff'
+        return False
+
+    def proof_body_to_metta(self, proof: Proof) -> MeTTa:
+        """Convert proof body (assuming essential hypotheses) to MeTTa.
+
+        The proof is assumed to have been stripped of floating
+        hypotheses as well axioms about wff.
+
+        For instance
+
+        proof_body_to_metta(['xor12d.1', 'xor12d.2', 'bibi12d', 'notbid', 'df-xor', 'df-xor', '3bitr4g']
+
+        outputs
+
+        (3bitr4g df-xor df-xor (notbid (bibi12d xor12d.2 xor12d.1)))
+
+        """
+        NEXT
+
+    def proof_to_metta(self, e_labels: list[Label], proof: Proof) -> MeTTa:
+
+        """Convert proof to MeTTa.
+
+        For instance
+
+        proof_to_metta(['xor12d.1', 'xor12d.2'], ['wph', 'wps', 'wth', 'wb', 'wn', 'wch', 'wta', 'wb', 'wn', 'wps', 'wth', 'wxo', 'wch', 'wta', 'wxo', 'wph', 'wps', 'wth', 'wb', 'wch', 'wta', 'wb', 'wph', 'wps', 'wch', 'wth', 'wta', 'xor12d.1', 'xor12d.2', 'bibi12d', 'notbid', 'wps', 'wth', 'df-xor', 'wch', 'wta', 'df-xor', '3bitr4g'])
+
+        outputs
+
+        (λ xor12d.1 xor12d.2 (3bitr4g df-xor df-xor (notbid (bibi12d xor12d.2 xor12d.1))))
+
+        """
+
+        # Filter out wff proof steps
+        proof_wo_wff = [s for s in proof if self.is_about_wff(s)]
+
+        # Build proof body
+        proof_body = self.proof_body_to_metta(proof_wo_wff)
+
+        # Return full proof
+        return "(λ {} {})".format(" ".join(e_labels), proof_body)
+
+    def get_essential_hypothesis(self, label: Label) -> list():
+        """Return essential with given label, or empty if does not exists.
+
+        For instance
+
+        get_essential_hypothesis('xor12d.1')
+
+        outputs
+
+        ['|-', '(', 'ph', '->', '(', 'ps', '<->', 'ch', ')', ')']
+
+        """
+        flstmt = self.mm.labels[label]
+        if flstmt[0] == '$e':
+            return flstmt[1]
+        return []
+
+    def get_essential_labels(self, proof: Proof, flstmt: FullStmt) -> list[Label]:
+        """Return list of labels of essential hypotheses in proof, in order."""
+        ehyps = flstmt[1][2]
+        idx_to_e_label = {ehyps.index(self.get_essential_hypothesis(step)) : step
+                          for step in proof
+                          if self.get_essential_hypothesis(step) in ehyps}
+        return [v for k, v in sorted(idx_to_e_label.items())]
+
+    def proven_theorem_to_metta(self, proof: Proof, flstmt: FullStmt) -> MeTTa:
+        """Convert proven theorem to MeTTa.
+
+        For instance
+
+        proven_theorem_to_metta(['wph', 'wps', 'wth', 'wb', 'wn', 'wch', 'wta', 'wb', 'wn', 'wps', 'wth', 'wxo', 'wch', 'wta', 'wxo', 'wph', 'wps', 'wth', 'wb', 'wch', 'wta', 'wb', 'wph', 'wps', 'wch', 'wth', 'wta', 'xor12d.1', 'xor12d.2', 'bibi12d', 'notbid', 'wps', 'wth', 'df-xor', 'wch', 'wta', 'df-xor', '3bitr4g'], ('$p', (set(), [('wff', 'ph'), ('wff', 'ps'), ('wff', 'ch'), ('wff', 'th'), ('wff', 'ta')], [['|-', '(', 'ph', '->', '(', 'ps', '<->', 'ch', ')', ')'], ['|-', '(', 'ph', '->', '(', 'th', '<->', 'ta', ')', ')']], ['|-', '(', 'ph', '->', '(', '(', 'ps', '\\/_', 'th', ')', '<->', '(', 'ch', '\\/_', 'ta', ')', ')', ')'])))
+
+        outputs
+
+        (: (λ xor12d.1 xor12d.2 (3bitr4g df-xor df-xor (notbid (bibi12d xor12d.2 xor12d.1)))) (-> (→ $𝜑 (↔ $𝜓 $𝜒)) (→ $𝜑 (↔ $𝜃 $𝜏)) (→ $𝜑 (↔ (⊻ $𝜓 $𝜃) (⊻ $𝜒 $𝜏)))))
+
+        """
+        # Gather labels of essential hypotheses
+        e_labels = self.get_essential_labels(proof, flstmt)
+
+        # Output proven theorem
+        return "(: {} {})".format(self.proof_to_metta(e_labels, proof),
+                                  self.fullstmt_to_metta(flstmt))
+
+    def to_metta(self, label: Label) -> MeTTa:
+        """Convert whatever is associated to a given label to MeTTa.
+
+        For instance
+
+        to_metta("ax-mp")
+
+        outputs
+
+        (: ax-mp (-> $𝜑 (→ $𝜑 $𝜓) $𝜓))
+
+        because "ax-mp" is an axiom.
+
+        """
+        NEXT
 
 
 if __name__ == '__main__':
@@ -879,4 +1091,64 @@ if __name__ == '__main__':
     vprint(1, 'Reading source file "{}"...'.format(db_file.name))
     mm.read(Toks(db_file))
     vprint(1, 'No errors were found.')
+    print("mm.constants = {}".format(mm.constants))
+    print("mm.fs = {}".format(mm.fs))
+    print("mm.labels[{}] = {}".format('wph', mm.labels['wph']))
+    print("mm.labels[{}] = {}".format('ax-1', mm.labels['ax-1']))
+    print("mm.labels[{}] = {}".format('ax-mp', mm.labels['ax-mp']))
+    print("mm.labels[{}] = {}".format('idi.1', mm.labels['idi.1']))
+    print("mm.labels[{}] = {}".format('idi', mm.labels['idi']))
+    print("mm.labels[{}] = {}".format('2a1i.1', mm.labels['2a1i.1']))
+    print("mm.labels[{}] = {}".format('2a1i', mm.labels['2a1i']))
+    print("mm.labels[{}] = {}".format('xor12d.1', mm.labels['xor12d.1']))
+    print("mm.labels[{}] = {}".format('xor12d.2', mm.labels['xor12d.2']))
+    print("mm.labels[{}] = {}".format('xorbi12d', mm.labels['xorbi12d']))
+    print("mm.proofs[{}] = {}".format('xorbi12d', mm.proofs['xorbi12d']))
     # mm.dump()
+
+    ######################################
+    # Convert the content of mm to MeTTa #
+    ######################################
+
+    tm = ToMeTTa(mm)
+
+    # Test stmt_to_metta
+    stmt1 = ['|-', '(', 'ph', '->', 'ps', ')']
+    print("tm.stmt_to_metta({}) = {}".format(stmt1, tm.stmt_to_metta(stmt1)))
+
+    # Test assertion_to_metta
+    asrt1 = (set(),
+             [('wff', 'ph'), ('wff', 'ps')],
+             [['|-', 'ph'], ['|-', '(', 'ph', '->', 'ps', ')']],
+             ['|-', 'ps'])
+    print("tm.assertion_to_metta({}) = {}".format(asrt1, tm.assertion_to_metta(asrt1)))
+
+    # Test axiom_to_metta
+    label1 = "ax-1"
+    flstmt1 = ('$a',
+               (set(),
+                [('wff', 'ph'), ('wff', 'ps')],
+                [],
+                ['|-', '(', 'ph', '->', '(', 'ps', '->', 'ph', ')', ')']))
+    print("tm.axiom_to_metta({}, {}) = {}".format(label1,
+                                                  flstmt1,
+                                                  tm.axiom_to_metta(label1,
+                                                                    flstmt1)))
+    label2 = "ax-mp"
+    flstmt2 = ('$a',
+               (set(),
+                [('wff', 'ph'), ('wff', 'ps')],
+                [['|-', 'ph'], ['|-', '(', 'ph', '->', 'ps', ')']],
+                ['|-', 'ps']))
+    print("tm.axiom_to_metta({}, {}) = {}".format(label2,
+                                                  flstmt2,
+                                                  tm.axiom_to_metta(label2,
+                                                                    flstmt2)))
+    print("tm.get_arity({}) = {}".format(label2, tm.get_arity(label2)))
+    print("tm.is_about_wff({}) = {}".format(label2, tm.is_about_wff(label2)))
+    print("tm.is_about_wff({}) = {}".format('wn', tm.is_about_wff('wn')))
+
+    proof3 = ['wph', 'wps', 'wth', 'wb', 'wn', 'wch', 'wta', 'wb', 'wn', 'wps', 'wth', 'wxo', 'wch', 'wta', 'wxo', 'wph', 'wps', 'wth', 'wb', 'wch', 'wta', 'wb', 'wph', 'wps', 'wch', 'wth', 'wta', 'xor12d.1', 'xor12d.2', 'bibi12d', 'notbid', 'wps', 'wth', 'df-xor', 'wch', 'wta', 'df-xor', '3bitr4g']
+    flstmt3 = ('$p', (set(), [('wff', 'ph'), ('wff', 'ps'), ('wff', 'ch'), ('wff', 'th'), ('wff', 'ta')], [['|-', '(', 'ph', '->', '(', 'ps', '<->', 'ch', ')', ')'], ['|-', '(', 'ph', '->', '(', 'th', '<->', 'ta', ')', ')']], ['|-', '(', 'ph', '->', '(', '(', 'ps', '\\/_', 'th', ')', '<->', '(', 'ch', '\\/_', 'ta', ')', ')', ')']))
+    print("tm.get_essential_labels({}, {}) = {}".format(proof3, flstmt3, tm.get_essential_labels(proof3, flstmt3)))
+
