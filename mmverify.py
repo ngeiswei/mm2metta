@@ -944,7 +944,48 @@ class ToMeTTa:
         (3bitr4g df-xor df-xor (notbid (bibi12d xor12d.2 xor12d.1)))
 
         """
-        NEXT
+        if len(proof) == 0:
+            return ""
+        proof.reverse()
+        return self.subproof_to_metta(proof, 0)[0]
+
+    def subproof_to_metta(self, proof: Proof, idx: int) -> tuple[MeTTa, int]:
+        """Like proof_body_to_metta but working on reversed proof with index.
+
+        Convert non-empty subproof in reverse order starting from
+        index idx into MeTTa, returning the updated index after
+        reading the tokens of the subproof.
+
+        """
+        head = proof[idx]
+        arity = self.get_arity(head)
+        idx = idx + 1
+
+        # Base case
+        if arity == 0:
+            return head, idx
+
+        # Recursive case
+        mt_subproofs = []
+        for _ in range(arity):
+            mt_subproof, idx = self.subproof_to_metta(proof, idx)
+            mt_subproofs.append(mt_subproof)
+        mt_subproofs.reverse()
+        return "({} {})".format(head, " ".join(mt_subproofs)), idx
+
+    def strip_out_wff(self, proof: Proof) -> Proof:
+        """Strip out proof steps involving wff.
+
+        For instance
+
+        strip_out_wff(['wph', 'wps', 'wth', 'wb', 'wn', 'wch', 'wta', 'wb', 'wn', 'wps', 'wth', 'wxo', 'wch', 'wta', 'wxo', 'wph', 'wps', 'wth', 'wb', 'wch', 'wta', 'wb', 'wph', 'wps', 'wch', 'wth', 'wta', 'xor12d.1', 'xor12d.2', 'bibi12d', 'notbid', 'wps', 'wth', 'df-xor', 'wch', 'wta', 'df-xor', '3bitr4g'])
+
+        outputs
+
+        ['xor12d.1', 'xor12d.2', 'bibi12d', 'notbid', 'df-xor', 'df-xor', '3bitr4g']
+
+        """
+        return [s for s in proof if not self.is_about_wff(s)]
 
     def proof_to_metta(self, e_labels: list[Label], proof: Proof) -> MeTTa:
 
@@ -956,12 +997,12 @@ class ToMeTTa:
 
         outputs
 
-        (λ xor12d.1 xor12d.2 (3bitr4g df-xor df-xor (notbid (bibi12d xor12d.2 xor12d.1))))
+        (λ xor12d.1 xor12d.2 (3bitr4g (notbid (bibi12d xor12d.1 xor12d.2)) df-xor df-xor))
 
         """
 
         # Filter out wff proof steps
-        proof_wo_wff = [s for s in proof if self.is_about_wff(s)]
+        proof_wo_wff = self.strip_out_wff(proof)
 
         # Build proof body
         proof_body = self.proof_body_to_metta(proof_wo_wff)
@@ -1003,7 +1044,7 @@ class ToMeTTa:
 
         outputs
 
-        (: (λ xor12d.1 xor12d.2 (3bitr4g df-xor df-xor (notbid (bibi12d xor12d.2 xor12d.1)))) (-> (→ $𝜑 (↔ $𝜓 $𝜒)) (→ $𝜑 (↔ $𝜃 $𝜏)) (→ $𝜑 (↔ (⊻ $𝜓 $𝜃) (⊻ $𝜒 $𝜏)))))
+        (: (λ xor12d.1 xor12d.2 (3bitr4g (notbid (bibi12d xor12d.1 xor12d.2)) df-xor df-xor)) (-> (→ $𝜑 (↔ $𝜓 $𝜒)) (→ $𝜑 (↔ $𝜃 $𝜏)) (→ $𝜑 (↔ (⊻ $𝜓 $𝜃) (⊻ $𝜒 $𝜏)))))
 
         """
         # Gather labels of essential hypotheses
@@ -1148,7 +1189,8 @@ if __name__ == '__main__':
     print("tm.is_about_wff({}) = {}".format(label2, tm.is_about_wff(label2)))
     print("tm.is_about_wff({}) = {}".format('wn', tm.is_about_wff('wn')))
 
+    ehyps3 = ['xor12d.1', 'xor12d.2']
     proof3 = ['wph', 'wps', 'wth', 'wb', 'wn', 'wch', 'wta', 'wb', 'wn', 'wps', 'wth', 'wxo', 'wch', 'wta', 'wxo', 'wph', 'wps', 'wth', 'wb', 'wch', 'wta', 'wb', 'wph', 'wps', 'wch', 'wth', 'wta', 'xor12d.1', 'xor12d.2', 'bibi12d', 'notbid', 'wps', 'wth', 'df-xor', 'wch', 'wta', 'df-xor', '3bitr4g']
     flstmt3 = ('$p', (set(), [('wff', 'ph'), ('wff', 'ps'), ('wff', 'ch'), ('wff', 'th'), ('wff', 'ta')], [['|-', '(', 'ph', '->', '(', 'ps', '<->', 'ch', ')', ')'], ['|-', '(', 'ph', '->', '(', 'th', '<->', 'ta', ')', ')']], ['|-', '(', 'ph', '->', '(', '(', 'ps', '\\/_', 'th', ')', '<->', '(', 'ch', '\\/_', 'ta', ')', ')', ')']))
     print("tm.get_essential_labels({}, {}) = {}".format(proof3, flstmt3, tm.get_essential_labels(proof3, flstmt3)))
-
+    print("tm.proof_to_metta({}, {}) = {}".format(ehyps3, proof3, tm.proof_to_metta(ehyps3, proof3)))
