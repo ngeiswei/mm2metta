@@ -1,21 +1,24 @@
 #!/usr/bin/env python3
-"""mmverify.py -- Proof verifier for the Metamath language
+"""mm2metta.py -- Convert Metamath file to MeTTa
 Copyright (C) 2002 Raph Levien raph (at) acm (dot) org
 Copyright (C) David A. Wheeler and mmverify.py contributors
+Copyright (C) 2025 Nil Geisweiller
 
 This program is free software distributed under the MIT license;
 see the file LICENSE for full license information.
 SPDX-License-Identifier: MIT
 
+Derived from https://github.com/david-a-wheeler/mmverify.py.
+
 To run the program, type
-  $ python3 mmverify.py set.mm --logfile set.log
+  $ python3 mm2metta.py set.mm --logfile set.log
 and set.log will have the verification results.  One can also use bash
 redirections and type '$ python3 mmverify.py < set.mm 2> set.log' but this
 would fail in case 'set.mm' contains (directly or not) a recursive inclusion
 statement $[ set.mm $] .
 
 To get help on the program usage, type
-  $ python3 mmverify.py -h
+  $ python3 mm2metta.py -h
 
 (nm 27-Jun-2005) mmverify.py requires that a $f hypothesis must not occur
 after a $e hypothesis in the same scope, even though this is allowed by
