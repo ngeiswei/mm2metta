@@ -1,14 +1,34 @@
-# mmverify.py
+# mm2metta
 
-This is a Metamath verifier written in Python, originally by Raph Levien.
+Python script to convert [Metamath](https://us.metamath.org/) file to
+[MeTTa](https://metta-lang.dev/).  It is derived from
+[mmverify.py](https://github.com/david-a-wheeler/mmverify.py), a
+Metamath verifier written in Python, originally by Raph Levien.
 
-Metamath is a formal language and an associated computer program (a proof checker) for archiving, verifying, and studying mathematical proofs.  The set of proved theorems using Metamath is [one of the largest bodies of formalized mathematics](http://us.metamath.org/mm_100.html). Multiple Metamath verifiers (written in different languages by different people) are used to verify them, reducing the risk that a software defect will lead to an incorrectly verified proof.
+## Prerequisite
 
-For a quick introduction to Metamath and its goals, see the video
-[Metamath Proof Explorer: A Modern Principia Mathematica](https://www.youtube.com/watch?v=8WH4Rd4UKGE).
+In order to properly work the proofs have to be fully unpacked.  To do
+that you may use the [metamath tool](https://us.metamath.org/#downloads)
+as follows
 
-For more information about Metamath, see the [Metamath website](http://us.metamath.org/).
+```bash
+./metamath "read 'METAMATH_SRC'" "save proof * / normal" "write source 'METAMATH_DST'" "exit"
+```
 
-You can also get the (physical) book about Metamath; see: [*Metamath: A Computer Language for Mathematical Proofs* by Norman Megill & David A. Wheeler, 2019, ISBN 9780359702237](http://www.lulu.com/shop/norman-megill-and-david-a-wheeler/metamath-a-computer-language-for-mathematical-proofs/hardcover/product-24129769.html).
+where `METAMATH_SRC` and `METAMATH_DST` are the source and destination
+metamath files of interest.  `METAMATH_SRC` can be the same as
+`METAMATH_DST`.
 
-This software is free-libre / open source software (FLOSS) released under the MIT license.
+## Usage
+
+```
+./mm2metta.py METAMATH_SRC > METTA_DST
+```
+
+where `METAMATH_SRC` is a MetaMath source file and `METTA_DST` is the
+target file where to write the conversion.
+
+## Lisence
+
+This software is free-libre / open source software (FLOSS) released
+under the MIT license.
