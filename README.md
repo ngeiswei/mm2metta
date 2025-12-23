@@ -1,13 +1,15 @@
 # mm2metta
 
-Python script to convert Metamath file to MeTTa.  It is derived from
+Python script to convert [Metamath](https://us.metamath.org/) file to
+[MeTTa](https://metta-lang.dev/).  It is derived from
 [mmverify.py](https://github.com/david-a-wheeler/mmverify.py), a
 Metamath verifier written in Python, originally by Raph Levien.
 
 ## Prerequisite
 
 In order to properly work the proofs have to be fully unpacked.  To do
-that you may use the [metamath tool]() as follows
+that you may use the [metamath tool](https://us.metamath.org/#downloads)
+as follows
 
 ```bash
 ./metamath "read 'METAMATH_SRC'" "save proof * / normal" "write source 'METAMATH_DST'" "exit"
