@@ -767,7 +767,7 @@ class ToMeTTa:
                     top_result, top_flag = stack.pop()
                     top_result.append(result[0])
                     result = top_result, top_flag
-            elif token == '-.':
+            elif token == '-.' or token == 'if-':
                 # Start a new sublist with negation when encountering a negation
                 stack.append(result)
                 result = [token], True
@@ -795,7 +795,6 @@ class ToMeTTa:
 
         "(→ $𝜑 ($𝜓 ↔ $𝜒))"
         """
-
         # Token
         if isinstance(ast, str):
             return self.token_to_metta[ast]
@@ -808,18 +807,91 @@ class ToMeTTa:
             child = ast[0]
             return "({})".format(self.ast_to_metta(child))
         if arity == 2:
-            left = ast[0]
-            right = ast[1]
-            return "({} {})".format(self.ast_to_metta(left),
-                                    self.ast_to_metta(right))
+            # Assumed format: [OP ARG]
+            op = ast[0]
+            arg = ast[1]
+            if op == '-.':
+                return "({} {})".format(self.ast_to_metta(op),
+                                        self.ast_to_metta(arg))
+            # If it is not '-.' then it should be 'if-'
+            if op == 'if-':
+                assert len(arg) == 5
+                cond = arg[0]
+                brn1 = arg[2]
+                brn2 = arg[4]
+                return "({} {} {} {})".format(self.ast_to_metta(op),
+                                              self.ast_to_metta(cond),
+                                              self.ast_to_metta(brn1),
+                                              self.ast_to_metta(brn2))
+            raise ValueError(f"Operator {op} not supported")
         if arity == 3:
-            left = ast[0]
-            center = ast[1]    # Assumed to be an infix connector
-            right = ast[2]
-            return "({} {} {})".format(self.ast_to_metta(center),
-                                       self.ast_to_metta(left),
-                                       self.ast_to_metta(right))
-        raise ValueError("Arity greater than 3 not supported")
+            # Assumed format: [ARG1 OP ARG2]
+            arg1 = ast[0]
+            op = ast[1]    # Assumed to be an infix connector
+            arg2 = ast[2]
+            return "({} {} {})".format(self.ast_to_metta(op),
+                                       self.ast_to_metta(arg1),
+                                       self.ast_to_metta(arg2))
+        if arity == 5:
+            # Assumed format: [ARG1 OP ARG2 OP ARG3]
+            arg1 = ast[0]
+            op1 = ast[1]
+            arg2 = ast[2]
+            op2 = ast[3]
+            arg3 = ast[4]
+            assert op1 == op2
+            return "({} {} {} {})".format(self.ast_to_metta(op1),
+                                          self.ast_to_metta(arg1),
+                                          self.ast_to_metta(arg2),
+                                          self.ast_to_metta(arg3))
+        raise ValueError(f"Arity {arity} not supported")
+
+    def is_entailment(self, flstmt: FullStmt) -> bool:
+        """Return True iff the given full statement is about entailement
+
+        For instance
+
+        is_entailment(('$p', (set(), [('wff', 'ph')], [['|-', 'ph']], ['|-', 'ph'])))
+
+        returns True, while
+
+        is_entailment(('$a', (set(), [('wff', 'ph')], [], ['wff', '-.', 'ph'])))
+
+        return False.
+
+        """
+        stmt = self.get_statement(flstmt)
+        if len(stmt) == 0:
+            return False
+        return stmt[0] == '|-'
+
+    def is_axiom(self, flstmt: FullStmt) -> bool:
+        """Return True iff the full statement is an axiom.
+
+        For instance
+
+        is_axiom(('$a', (set(), [('wff', 'ph'), ('wff', 'ps')], [['|-', 'ph'], ['|-', '(', 'ph', '->', 'ps', ')']], ['|-', 'ps'])))
+
+        returns True.
+
+        """
+        return flstmt[0] == '$a'
+
+    def get_statement(self, flstmt: FullStmt) -> Stmt:
+        """Take a full statement and access its statement.
+
+        For instance
+
+        get_statement(('$a', (set(), [('wff', 'ph')], [], ['wff', '-.', 'ph'])))
+
+        outputs
+
+        ['wff', '-.', 'ph']
+
+        """
+        if is_hypothesis(flstmt):
+            return flstmt[1]
+        return flstmt[1][3]
 
     def stmt_to_metta(self, tokens: Stmt) -> MeTTa:
         """Convert a statement as list of tokens to MeTTa S-expression.
@@ -841,7 +913,7 @@ class ToMeTTa:
         return self.ast_to_metta(ast[1] if ast[0] == '|-' else ast)
 
     def assertion_to_metta(self, asrt: Assertion) -> MeTTa:
-        """Convert Assertion to MeTTa S-expression.
+        """Convert Assertion to MeTTa.
 
         For instance
 
@@ -923,11 +995,7 @@ class ToMeTTa:
     def is_about_wff(self, label: Label) -> bool:
         """Return True iff the label is about a wff assertion"""
         flstmt = self.mm.labels[label]
-        if is_hypothesis(flstmt):
-            return flstmt[1][0] == 'wff'
-        if is_assertion(flstmt):
-            return flstmt[1][3][0] == 'wff'
-        return False
+        return self.get_statement(flstmt)[0] == 'wff'
 
     def proof_body_to_metta(self, proof: Proof) -> MeTTa:
         """Convert proof body (assuming essential hypotheses) to MeTTa.
@@ -959,7 +1027,7 @@ class ToMeTTa:
         """
         head = proof[idx]
         arity = self.get_arity(head)
-        idx = idx + 1
+        idx += 1
 
         # Base case
         if arity == 0:
@@ -1008,6 +1076,8 @@ class ToMeTTa:
         proof_body = self.proof_body_to_metta(proof_wo_wff)
 
         # Return full proof
+        if len(e_labels) == 0:
+            return proof_body
         return "(λ {} {})".format(" ".join(e_labels), proof_body)
 
     def get_essential_hypothesis(self, label: Label) -> list():
@@ -1054,21 +1124,85 @@ class ToMeTTa:
         return "(: {} {})".format(self.proof_to_metta(e_labels, proof),
                                   self.fullstmt_to_metta(flstmt))
 
-    def to_metta(self, label: Label) -> MeTTa:
-        """Convert whatever is associated to a given label to MeTTa.
+    def to_metta(self) -> MeTTa:
+        """Convert the full Metamath corpus into MeTTa.
 
-        For instance
+        Create the following type definitions
 
-        to_metta("ax-mp")
+        ```
+        ;; Assertion, either axiom or theorem
+        (: Assertion Type)
+        (: MkAxiom (-> Symbol Atom Assertion))
+        (: MkTheorem (-> Symbol Atom Atom Assertion))
 
-        outputs
+        ;; Indexed assertion
+        (: Index Type)
+        (: MkIndexed (-> Number Assertion Index))
+        ```
 
-        (: ax-mp (-> $𝜑 (→ $𝜑 $𝜓) $𝜓))
+        alongside data such as
 
-        because "ax-mp" is an axiom.
+        ```
+        (MkIndex 0 (MkTheorem idi (λ idi.1 idi.1) (-> $𝜑 $𝜑)))
+        ```
+
+        where
+        - 0 is the index of the assertion (here a theorem)
+        - `idi` is the label of the theorem
+        - `(λ idi.1 idi.1)` is the proof of the theorem
+        - `(-> $𝜑 $𝜑)` is the statement of the theorem
+
+        or
+
+        ```
+        (MkIndex 2 (MkAxiom ax-mp (-> $𝜑 (→ $𝜑 $𝜓) $𝜓)))
+        ```
+
+        where
+        - 2 is the index of the assertion (here an axiom)
+        - `ax-mp` is the label of the axiom
+        - `(-> $𝜑 (→ $𝜑 $𝜓) $𝜓)` is the statement if the axiom
+
+        Only assertions about entailement `|-` are considered,
+        i.e. assertions about `wff` are ignored.
 
         """
-        NEXT
+        # Define indexed assertion type
+        type_defs = []
+        type_defs.append(";;;;;;;;;")
+        type_defs.append("; Types ;")
+        type_defs.append(";;;;;;;;;")
+        type_defs.append("")
+        type_defs.append(";; Assertion, either axiom or theorem")
+        type_defs.append("(: Assertion Type)")
+        type_defs.append("(: MkAxiom (-> Symbol Atom Assertion))")
+        type_defs.append("(: MkTheorem (-> Symbol Atom Atom Assertion))")
+        type_defs.append("")
+        type_defs.append(";; Indexed assertion")
+        type_defs.append("(: Index Type)")
+        type_defs.append("(: MkIndexed (-> Number Assertion Index))")
+        type_defs.append("")
+
+        # Populate indexed assertions
+        data = []
+        data.append(";;;;;;;;")
+        data.append("; Data ;")
+        data.append(";;;;;;;;")
+        data.append("")
+        idx = 0
+        for label, flstmt in self.mm.labels.items():
+            if is_assertion(flstmt) and self.is_entailment(flstmt):
+                mt_stmt = self.fullstmt_to_metta(flstmt)
+                if self.is_axiom(flstmt):
+                    mt_assertion =  f"(MkAxiom {label} {mt_stmt})"
+                else:
+                    proof = self.mm.proofs[label]
+                    e_labels = self.get_essential_labels(proof, flstmt)
+                    mt_proof = self.proof_to_metta(e_labels, proof)
+                    mt_assertion = f"(MkTheorem {label} {mt_proof} {mt_stmt})"
+                data.append(f"(MkIndex {idx} {mt_assertion})")
+                idx += 1
+        return "\n".join(type_defs) + "\n" + "\n".join(data) + "\n"
 
 
 if __name__ == '__main__':
@@ -1132,65 +1266,7 @@ if __name__ == '__main__':
     vprint(1, 'Reading source file "{}"...'.format(db_file.name))
     mm.read(Toks(db_file))
     vprint(1, 'No errors were found.')
-    print("mm.constants = {}".format(mm.constants))
-    print("mm.fs = {}".format(mm.fs))
-    print("mm.labels[{}] = {}".format('wph', mm.labels['wph']))
-    print("mm.labels[{}] = {}".format('ax-1', mm.labels['ax-1']))
-    print("mm.labels[{}] = {}".format('ax-mp', mm.labels['ax-mp']))
-    print("mm.labels[{}] = {}".format('idi.1', mm.labels['idi.1']))
-    print("mm.labels[{}] = {}".format('idi', mm.labels['idi']))
-    print("mm.labels[{}] = {}".format('2a1i.1', mm.labels['2a1i.1']))
-    print("mm.labels[{}] = {}".format('2a1i', mm.labels['2a1i']))
-    print("mm.labels[{}] = {}".format('xor12d.1', mm.labels['xor12d.1']))
-    print("mm.labels[{}] = {}".format('xor12d.2', mm.labels['xor12d.2']))
-    print("mm.labels[{}] = {}".format('xorbi12d', mm.labels['xorbi12d']))
-    print("mm.proofs[{}] = {}".format('xorbi12d', mm.proofs['xorbi12d']))
     # mm.dump()
 
-    ######################################
-    # Convert the content of mm to MeTTa #
-    ######################################
-
-    tm = ToMeTTa(mm)
-
-    # Test stmt_to_metta
-    stmt1 = ['|-', '(', 'ph', '->', 'ps', ')']
-    print("tm.stmt_to_metta({}) = {}".format(stmt1, tm.stmt_to_metta(stmt1)))
-
-    # Test assertion_to_metta
-    asrt1 = (set(),
-             [('wff', 'ph'), ('wff', 'ps')],
-             [['|-', 'ph'], ['|-', '(', 'ph', '->', 'ps', ')']],
-             ['|-', 'ps'])
-    print("tm.assertion_to_metta({}) = {}".format(asrt1, tm.assertion_to_metta(asrt1)))
-
-    # Test axiom_to_metta
-    label1 = "ax-1"
-    flstmt1 = ('$a',
-               (set(),
-                [('wff', 'ph'), ('wff', 'ps')],
-                [],
-                ['|-', '(', 'ph', '->', '(', 'ps', '->', 'ph', ')', ')']))
-    print("tm.axiom_to_metta({}, {}) = {}".format(label1,
-                                                  flstmt1,
-                                                  tm.axiom_to_metta(label1,
-                                                                    flstmt1)))
-    label2 = "ax-mp"
-    flstmt2 = ('$a',
-               (set(),
-                [('wff', 'ph'), ('wff', 'ps')],
-                [['|-', 'ph'], ['|-', '(', 'ph', '->', 'ps', ')']],
-                ['|-', 'ps']))
-    print("tm.axiom_to_metta({}, {}) = {}".format(label2,
-                                                  flstmt2,
-                                                  tm.axiom_to_metta(label2,
-                                                                    flstmt2)))
-    print("tm.get_arity({}) = {}".format(label2, tm.get_arity(label2)))
-    print("tm.is_about_wff({}) = {}".format(label2, tm.is_about_wff(label2)))
-    print("tm.is_about_wff({}) = {}".format('wn', tm.is_about_wff('wn')))
-
-    ehyps3 = ['xor12d.1', 'xor12d.2']
-    proof3 = ['wph', 'wps', 'wth', 'wb', 'wn', 'wch', 'wta', 'wb', 'wn', 'wps', 'wth', 'wxo', 'wch', 'wta', 'wxo', 'wph', 'wps', 'wth', 'wb', 'wch', 'wta', 'wb', 'wph', 'wps', 'wch', 'wth', 'wta', 'xor12d.1', 'xor12d.2', 'bibi12d', 'notbid', 'wps', 'wth', 'df-xor', 'wch', 'wta', 'df-xor', '3bitr4g']
-    flstmt3 = ('$p', (set(), [('wff', 'ph'), ('wff', 'ps'), ('wff', 'ch'), ('wff', 'th'), ('wff', 'ta')], [['|-', '(', 'ph', '->', '(', 'ps', '<->', 'ch', ')', ')'], ['|-', '(', 'ph', '->', '(', 'th', '<->', 'ta', ')', ')']], ['|-', '(', 'ph', '->', '(', '(', 'ps', '\\/_', 'th', ')', '<->', '(', 'ch', '\\/_', 'ta', ')', ')', ')']))
-    print("tm.get_essential_labels({}, {}) = {}".format(proof3, flstmt3, tm.get_essential_labels(proof3, flstmt3)))
-    print("tm.proof_to_metta({}, {}) = {}".format(ehyps3, proof3, tm.proof_to_metta(ehyps3, proof3)))
+    # Convert content of mm to MeTTa and write the result to stdout
+    sys.stdout.write(ToMeTTa(mm).to_metta())
