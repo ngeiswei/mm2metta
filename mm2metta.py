@@ -1145,14 +1145,14 @@ class ToMeTTa:
         (: MkTheorem (-> Symbol Atom Atom Assertion))
 
         ;; Indexed assertion
-        (: Index Type)
-        (: MkIndexed (-> Number Assertion Index))
+        (: Indexed Type)
+        (: MkIndexed (-> Number Assertion Indexed))
         ```
 
         alongside data such as
 
         ```
-        (MkIndex 0 (MkTheorem idi (λ idi.1 idi.1) (-> $𝜑 $𝜑)))
+        (MkIndexed 0 (MkTheorem idi (λ idi.1 idi.1) (-> $𝜑 $𝜑)))
         ```
 
         where
@@ -1164,7 +1164,7 @@ class ToMeTTa:
         or
 
         ```
-        (MkIndex 2 (MkAxiom ax-mp (-> $𝜑 (→ $𝜑 $𝜓) $𝜓)))
+        (MkIndexed 2 (MkAxiom ax-mp (-> $𝜑 (→ $𝜑 $𝜓) $𝜓)))
         ```
 
         where
@@ -1184,12 +1184,19 @@ class ToMeTTa:
         type_defs.append("")
         type_defs.append(";; Assertion, either axiom or theorem")
         type_defs.append("(: Assertion Type)")
-        type_defs.append("(: MkAxiom (-> Symbol Atom Assertion))")
-        type_defs.append("(: MkTheorem (-> Symbol Atom Atom Assertion))")
+        type_defs.append("(: MkAxiom (-> Symbol ; Label")
+        type_defs.append("               Atom   ; Axiom")
+        type_defs.append("               Assertion))")
+        type_defs.append("(: MkTheorem (-> Symbol ; Label")
+        type_defs.append("                 Atom   ; Proof")
+        type_defs.append("                 Atom   ; Theorem")
+        type_defs.append("                 Assertion))")
         type_defs.append("")
         type_defs.append(";; Indexed assertion")
-        type_defs.append("(: Index Type)")
-        type_defs.append("(: MkIndexed (-> Number Assertion Index))")
+        type_defs.append("(: Indexed Type)")
+        type_defs.append("(: MkIndexed (-> Number    ; Index")
+        type_defs.append("                 Assertion ; Axiom or Theorem")
+        type_defs.append("                 Indexed))")
         type_defs.append("")
 
         # Populate indexed assertions
@@ -1202,14 +1209,16 @@ class ToMeTTa:
         for label, flstmt in self.mm.labels.items():
             if is_assertion(flstmt) and self.is_entailment(flstmt):
                 mt_stmt = self.fullstmt_to_metta(flstmt)
-                if self.is_axiom(flstmt):
+                if self.is_axiom(flstmt): # Axiom
                     mt_assertion =  f"(MkAxiom {label} {mt_stmt})"
-                else:
+                else:                     # Theorem
                     proof = self.mm.proofs[label]
                     e_labels = self.get_essential_labels(proof, flstmt)
+                    hypotheses = flstmt[1][2]
+                    assert len(e_labels) == len(hypotheses)
                     mt_proof = self.proof_to_metta(e_labels, proof)
                     mt_assertion = f"(MkTheorem {label} {mt_proof} {mt_stmt})"
-                data.append(f"(MkIndex {idx} {mt_assertion})")
+                data.append(f"(MkIndexed {idx} {mt_assertion})")
                 idx += 1
         return "\n".join(type_defs) + "\n" + "\n".join(data) + "\n"
 
