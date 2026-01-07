@@ -1106,6 +1106,12 @@ class ToMeTTa:
         idx_to_e_label = {ehyps.index(self.get_essential_hypothesis(step)) : step
                           for step in proof
                           if self.get_essential_hypothesis(step) in ehyps}
+        # In case the proof does not use all essential hypotheses
+        if len(idx_to_e_label) != len(ehyps):
+            ehyp = list(idx_to_e_label.values())[0]
+            prefix, _ = ehyp.split('.')
+            idx_to_e_label = {idx : '.'.join([prefix, str(idx + 1)])
+                              for idx in range(len(ehyps))}
         return [v for k, v in sorted(idx_to_e_label.items())]
 
     def proven_theorem_to_metta(self, proof: Proof, flstmt: FullStmt) -> MeTTa:
