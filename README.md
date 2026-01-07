@@ -7,7 +7,7 @@ Metamath verifier written in Python, originally by Raph Levien.
 
 ## Prerequisite
 
-In order to properly work the proofs have to be fully unpacked.  To do
+In order to properly work, the proofs have to be fully unpacked.  To do
 that you may use the [metamath tool](https://us.metamath.org/#downloads)
 as follows
 
