@@ -915,7 +915,7 @@ class ToMeTTa:
         # Convert AST to MeTTa, possibly dropping '|-'
         return self.ast_to_metta(ast[1] if ast[0] == '|-' else ast)
 
-    def assertion_to_metta(self, asrt: Assertion) -> MeTTa:
+    def assertion_to_metta(self, label: Label, asrt: Assertion) -> MeTTa:
         """Convert Assertion to MeTTa.
 
         For instance
@@ -927,7 +927,7 @@ class ToMeTTa:
 
         outputs
 
-        (-> $𝜑 (→ $𝜑 $𝜓) $𝜓)
+        (-> (: min $𝜑) (: maj (→ $𝜑 $𝜓)) $𝜓)
 
         For now disjoint variables and floating hypotheses are
         ignored.
@@ -935,19 +935,23 @@ class ToMeTTa:
         """
         hypotheses = asrt[2]
         conclusion = asrt[3]
-        hmtas = [self.stmt_to_metta(h) for h in hypotheses]
+        e_labels = self.get_essential_labels(label)
+        assert len(hypotheses) == len(e_labels)
+        hmtas = ["(: {} {})".format(el, self.stmt_to_metta(h))
+                 for el, h in zip(e_labels, hypotheses)]
         cmta = self.stmt_to_metta(conclusion)
 
         if len(hmtas) == 0:
             return cmta
         return "(-> {} {})".format(" ".join(hmtas), cmta)
 
-    def fullstmt_to_metta(self, flstmt: FullStmt) -> MeTTa:
+    def fullstmt_to_metta(self, label: Label, flstmt: FullStmt) -> MeTTa:
         """Convert full statement to MeTTa.
 
         For instance
 
-        fullstmt_to_metta(('$a',
+        fullstmt_to_metta('ax-mp',
+                          ('$a',
                            (set(),
                             [('wff', 'ph'), ('wff', 'ps')],
                             [['|-', 'ph'], ['|-', '(', 'ph', '->', 'ps', ')']],
@@ -955,11 +959,11 @@ class ToMeTTa:
 
         outputs
 
-        (-> $𝜑 (→ $𝜑 $𝜓) $𝜓)
+        (-> (: min $𝜑) (: maj (→ $𝜑 $𝜓)) $𝜓)
 
         """
         if is_assertion(flstmt):
-            return self.assertion_to_metta(flstmt[1])
+            return self.assertion_to_metta(label, flstmt[1])
         raise ValueError("Not supported")
 
     def axiom_to_metta(self, label: Label, flstmt: FullStmt) -> MeTTa:
@@ -974,10 +978,10 @@ class ToMeTTa:
 
         outputs
 
-        (: ax-mp (-> $𝜑 (→ $𝜑 $𝜓) $𝜓))
+        (: ax-mp (-> (: min $𝜑) (: maj (→ $𝜑 $𝜓)) $𝜓))
 
         """
-        return "(: {} {})".format(label, self.fullstmt_to_metta(flstmt))
+        return "(: {} {})".format(label, self.fullstmt_to_metta(label, flstmt))
 
     def get_arity(self, label: Label) -> int:
         """Get the arity of whatever is associated to the given label.
@@ -1122,7 +1126,7 @@ class ToMeTTa:
 
         For instance
 
-        get_essential_labels_of('ax-mp')
+        get_essential_labels('ax-mp')
 
         outputs
 
@@ -1131,16 +1135,16 @@ class ToMeTTa:
         """
         ehyps = self.get_essential_hypotheses(label)
         ehyps_len = len(ehyps)
-        ehyps.reverse()
+        rehyps = list(reversed(ehyps))
         keys = list(mm.labels.keys())
         label_idx = keys.index(label)
         elabels = []
         for k in reversed(keys[:label_idx]):
-            if len(ehyps) == 0:
+            if len(rehyps) == 0:
                 break
-            if self.get_essential_hypothesis(k) == ehyps[0]:
+            if self.get_essential_hypothesis(k) == rehyps[0]:
                 elabels += [k]
-                ehyps = ehyps[1:]
+                rehyps = rehyps[1:]
         assert len(elabels) == ehyps_len
         elabels.reverse()
         return elabels
@@ -1164,14 +1168,14 @@ class ToMeTTa:
         alongside data such as
 
         ```
-        (MkIndexed 0 (MkTheorem idi (λ idi.1 idi.1) (-> $𝜑 $𝜑)))
+        (MkIndexed 0 (MkTheorem idi (λ idi.1 idi.1) (-> (: idi.1 $𝜑) $𝜑)))
         ```
 
         where
         - 0 is the index of the assertion (here a theorem)
         - `idi` is the label of the theorem
         - `(λ idi.1 idi.1)` is the proof of the theorem
-        - `(-> $𝜑 $𝜑)` is the statement of the theorem
+        - `(-> (: idi.1 $𝜑) $𝜑)` is the statement of the theorem
 
         or
 
@@ -1182,7 +1186,7 @@ class ToMeTTa:
         where
         - 2 is the index of the assertion (here an axiom)
         - `ax-mp` is the label of the axiom
-        - `(-> $𝜑 (→ $𝜑 $𝜓) $𝜓)` is the statement if the axiom
+        - `(-> (: min $𝜑) (: maj (→ $𝜑 $𝜓)) $𝜓)` is the statement if the axiom
 
         Only assertions about entailement `|-` are considered,
         i.e. assertions about `wff` are ignored.
@@ -1220,7 +1224,7 @@ class ToMeTTa:
         idx = 0
         for label, flstmt in self.mm.labels.items():
             if is_assertion(flstmt) and self.is_entailment(flstmt):
-                mt_stmt = self.fullstmt_to_metta(flstmt)
+                mt_stmt = self.fullstmt_to_metta(label, flstmt)
                 if self.is_axiom(flstmt): # Axiom
                     mt_assertion =  f"(MkAxiom {label} {mt_stmt})"
                 else:                     # Theorem
