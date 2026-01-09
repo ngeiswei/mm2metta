@@ -1083,8 +1083,25 @@ class ToMeTTa:
             return proof_body
         return "(λ {} {})".format(" ".join(e_labels), proof_body)
 
+    def get_essential_hypotheses(self, label: Label) -> list():
+        """Return essential hypotheses given an assertion label, or empty if not exist.
+
+        For instance
+
+        get_essential_hypotheses('ax-mp')
+
+        outputs
+
+        [['|-', 'ph'], ['|-', '(', 'ph', '->', 'ps', ')']]
+
+        """
+        flstmt = self.mm.labels[label]
+        if is_assertion(flstmt):
+            return flstmt[1][2]
+        return []
+
     def get_essential_hypothesis(self, label: Label) -> list():
-        """Return essential with given label, or empty if does not exists.
+        """Return essential of given label, or empty if does not exists.
 
         For instance
 
@@ -1100,38 +1117,33 @@ class ToMeTTa:
             return flstmt[1]
         return []
 
-    def get_essential_labels(self, proof: Proof, flstmt: FullStmt) -> list[Label]:
-        """Return list of labels of essential hypotheses in proof, in order."""
-        ehyps = flstmt[1][2]
-        idx_to_e_label = {ehyps.index(self.get_essential_hypothesis(step)) : step
-                          for step in proof
-                          if self.get_essential_hypothesis(step) in ehyps}
-        # In case the proof does not use all essential hypotheses
-        if len(idx_to_e_label) != len(ehyps):
-            ehyp = list(idx_to_e_label.values())[0]
-            prefix, _ = ehyp.split('.')
-            idx_to_e_label = {idx : '.'.join([prefix, str(idx + 1)])
-                              for idx in range(len(ehyps))}
-        return [v for k, v in sorted(idx_to_e_label.items())]
-
-    def proven_theorem_to_metta(self, proof: Proof, flstmt: FullStmt) -> MeTTa:
-        """Convert proven theorem to MeTTa.
+    def get_essential_labels(self, label: Label) -> list[Label]:
+        """Return list of labels of essential hypotheses given label of assertion.
 
         For instance
 
-        proven_theorem_to_metta(['wph', 'wps', 'wth', 'wb', 'wn', 'wch', 'wta', 'wb', 'wn', 'wps', 'wth', 'wxo', 'wch', 'wta', 'wxo', 'wph', 'wps', 'wth', 'wb', 'wch', 'wta', 'wb', 'wph', 'wps', 'wch', 'wth', 'wta', 'xor12d.1', 'xor12d.2', 'bibi12d', 'notbid', 'wps', 'wth', 'df-xor', 'wch', 'wta', 'df-xor', '3bitr4g'], ('$p', (set(), [('wff', 'ph'), ('wff', 'ps'), ('wff', 'ch'), ('wff', 'th'), ('wff', 'ta')], [['|-', '(', 'ph', '->', '(', 'ps', '<->', 'ch', ')', ')'], ['|-', '(', 'ph', '->', '(', 'th', '<->', 'ta', ')', ')']], ['|-', '(', 'ph', '->', '(', '(', 'ps', '\\/_', 'th', ')', '<->', '(', 'ch', '\\/_', 'ta', ')', ')', ')'])))
+        get_essential_labels_of('ax-mp')
 
         outputs
 
-        (: (λ xor12d.1 xor12d.2 (3bitr4g (notbid (bibi12d xor12d.1 xor12d.2)) df-xor df-xor)) (-> (→ $𝜑 (↔ $𝜓 $𝜒)) (→ $𝜑 (↔ $𝜃 $𝜏)) (→ $𝜑 (↔ (⊻ $𝜓 $𝜃) (⊻ $𝜒 $𝜏)))))
+        ['min', maj']
 
         """
-        # Gather labels of essential hypotheses
-        e_labels = self.get_essential_labels(proof, flstmt)
-
-        # Output proven theorem
-        return "(: {} {})".format(self.proof_to_metta(e_labels, proof),
-                                  self.fullstmt_to_metta(flstmt))
+        ehyps = self.get_essential_hypotheses(label)
+        ehyps_len = len(ehyps)
+        ehyps.reverse()
+        keys = list(mm.labels.keys())
+        label_idx = keys.index(label)
+        elabels = []
+        for k in reversed(keys[:label_idx]):
+            if len(ehyps) == 0:
+                break
+            if self.get_essential_hypothesis(k) == ehyps[0]:
+                elabels += [k]
+                ehyps = ehyps[1:]
+        assert len(elabels) == ehyps_len
+        elabels.reverse()
+        return elabels
 
     def to_metta(self) -> MeTTa:
         """Convert the full Metamath corpus into MeTTa.
@@ -1213,7 +1225,7 @@ class ToMeTTa:
                     mt_assertion =  f"(MkAxiom {label} {mt_stmt})"
                 else:                     # Theorem
                     proof = self.mm.proofs[label]
-                    e_labels = self.get_essential_labels(proof, flstmt)
+                    e_labels = self.get_essential_labels(label)
                     hypotheses = flstmt[1][2]
                     assert len(e_labels) == len(hypotheses)
                     mt_proof = self.proof_to_metta(e_labels, proof)
