@@ -927,7 +927,7 @@ class ToMeTTa:
 
         outputs
 
-        (-> (: min $𝜑) (: maj (→ $𝜑 $𝜓)) $𝜓)
+        (-> $𝜑 (→ $𝜑 $𝜓) $𝜓)
 
         For now disjoint variables and floating hypotheses are
         ignored.
@@ -937,8 +937,7 @@ class ToMeTTa:
         conclusion = asrt[3]
         e_labels = self.get_essential_labels(label)
         assert len(hypotheses) == len(e_labels)
-        hmtas = ["(: {} {})".format(el, self.stmt_to_metta(h))
-                 for el, h in zip(e_labels, hypotheses)]
+        hmtas = [self.stmt_to_metta(h) for el, h in zip(e_labels, hypotheses)]
         cmta = self.stmt_to_metta(conclusion)
 
         if len(hmtas) == 0:
@@ -959,7 +958,7 @@ class ToMeTTa:
 
         outputs
 
-        (-> (: min $𝜑) (: maj (→ $𝜑 $𝜓)) $𝜓)
+        (-> $𝜑 (→ $𝜑 $𝜓) $𝜓)
 
         """
         if is_assertion(flstmt):
@@ -978,7 +977,7 @@ class ToMeTTa:
 
         outputs
 
-        (: ax-mp (-> (: min $𝜑) (: maj (→ $𝜑 $𝜓)) $𝜓))
+        (: ax-mp (-> $𝜑 (→ $𝜑 $𝜓) $𝜓))
 
         """
         return "(: {} {})".format(label, self.fullstmt_to_metta(label, flstmt))
@@ -1168,14 +1167,14 @@ class ToMeTTa:
         alongside data such as
 
         ```
-        (MkIndexed 0 (MkTheorem idi (λ idi.1 idi.1) (-> (: idi.1 $𝜑) $𝜑)))
+        (MkIndexed 0 (MkTheorem idi (λ idi.1 idi.1) (-> $𝜑 $𝜑)))
         ```
 
         where
         - 0 is the index of the assertion (here a theorem)
         - `idi` is the label of the theorem
         - `(λ idi.1 idi.1)` is the proof of the theorem
-        - `(-> (: idi.1 $𝜑) $𝜑)` is the statement of the theorem
+        - `(-> $𝜑 $𝜑)` is the statement of the theorem
 
         or
 
@@ -1186,7 +1185,7 @@ class ToMeTTa:
         where
         - 2 is the index of the assertion (here an axiom)
         - `ax-mp` is the label of the axiom
-        - `(-> (: min $𝜑) (: maj (→ $𝜑 $𝜓)) $𝜓)` is the statement if the axiom
+        - `(-> $𝜑 (→ $𝜑 $𝜓) $𝜓)` is the statement if the axiom
 
         Only assertions about entailement `|-` are considered,
         i.e. assertions about `wff` are ignored.
