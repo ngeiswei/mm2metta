@@ -656,9 +656,19 @@ class MM:
 class ToMeTTa:
     """Class containing methods to convert MetaMath to MeTTa."""
 
-    def __init__(self, mm: MM) -> None:
+    def __init__(self, mm: MM, rao: bool) -> None:
         # Store reference of MM object
         self.mm = mm
+
+        # Inverse the argument order of the axioms and theorems.  This
+        # may matter because the first arguments tend to be less
+        # contrained than the last arguments, however the more
+        # constrained the arguments are the sooner they should be
+        # processed during the search as they tend to lead to fewer
+        # solutions, reducing the overall combinatorial explosion by
+        # pruning the search earlier.
+        self.reverse_argument_order = rao
+        # NEXT: implement reverse_argument_order
 
         # Mapping between metamath tokens and MeTTa
         self.token_to_metta: dict[str, str] = {}
@@ -938,6 +948,8 @@ class ToMeTTa:
         e_labels = self.get_essential_labels(label)
         assert len(hypotheses) == len(e_labels)
         hmtas = [self.stmt_to_metta(h) for el, h in zip(e_labels, hypotheses)]
+        if self.reverse_argument_order:
+            hmtas.reverse()
         cmta = self.stmt_to_metta(conclusion)
 
         if len(hmtas) == 0:
@@ -1044,7 +1056,8 @@ class ToMeTTa:
         for _ in range(arity):
             mt_subproof, idx = self.subproof_to_metta(proof, idx)
             mt_subproofs.append(mt_subproof)
-        mt_subproofs.reverse()
+        if not self.reverse_argument_order:
+            mt_subproofs.reverse()
         return "({} {})".format(head, " ".join(mt_subproofs)), idx
 
     def strip_out_wff(self, proof: Proof) -> Proof:
@@ -1084,6 +1097,8 @@ class ToMeTTa:
         # Return full proof
         if len(e_labels) == 0:
             return proof_body
+        if self.reverse_argument_order:
+            e_labels.reverse()
         return "(λ {} {})".format(" ".join(e_labels), proof_body)
 
     def get_essential_hypotheses(self, label: Label) -> list():
@@ -1302,4 +1317,4 @@ if __name__ == '__main__':
     # mm.dump()
 
     # Convert content of mm to MeTTa and write the result to stdout
-    sys.stdout.write(ToMeTTa(mm).to_metta())
+    sys.stdout.write(ToMeTTa(mm, True).to_metta())
