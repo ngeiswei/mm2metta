@@ -26,7 +26,10 @@ metamath files of interest.  `METAMATH_SRC` can be the same as
 ```
 
 where `METAMATH_SRC` is a MetaMath source file and `METTA_DST` is the
-target file where to write the conversion.
+target file where to write the conversion.  By default the arguments
+of the inference rules are in reversed order, because it can make
+proof search faster.  To switch off the reversing, go to mm2metta.py
+and look for the `reverse_argument_order` attribute of `ToMeTTa`.
 
 ## Lisence
 
