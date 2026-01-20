@@ -656,7 +656,7 @@ class MM:
 class ToMeTTa:
     """Class containing methods to convert MetaMath to MeTTa."""
 
-    def __init__(self, mm: MM, rao: bool) -> None:
+    def __init__(self, mm: MM, rao: bool, dv: bool) -> None:
         # Store reference of MM object
         self.mm = mm
 
@@ -668,24 +668,26 @@ class ToMeTTa:
         # solutions, reducing the overall combinatorial explosion by
         # pruning the search earlier.
         self.reverse_argument_order = rao
-        # NEXT: implement reverse_argument_order
+
+        # Prefix variables by a dollar sign, as per MeTTa.
+        self.dollar_variable = dv
 
         # Mapping between metamath tokens and MeTTa
         self.token_to_metta: dict[str, str] = {}
 
         # Variables
-        self.token_to_metta['ph'] = '$𝜑'    # phi (U+1D711, \mitphi)
-        self.token_to_metta['ps'] = '$𝜓'    # psi (U+1D713, \mitpsi)
-        self.token_to_metta['ch'] = '$𝜒'    # chi (U+1D712, \mitchi)
-        self.token_to_metta['th'] = '$𝜃'    # theta (U+1D703, \mittheta)
-        self.token_to_metta['ta'] = '$𝜏'    # tau (U+1D70F, \mittau)
-        self.token_to_metta['et'] = '$𝜂'    # eta (U+1D702, \miteta)
-        self.token_to_metta['ze'] = '$𝜁'    # zeta (U+1D701, \mitzeta)
-        self.token_to_metta['si'] = '$𝜎'    # sigma (U+1D70E, \mitsigma)
-        self.token_to_metta['rh'] = '$𝜌'    # rho (U+1D70C, \mitrho)
-        self.token_to_metta['mu'] = '$𝜇'    # mu (U+1D707, \mitmu)
-        self.token_to_metta['la'] = '$𝜆'    # lambda (U+1D706, \mitlambda)
-        self.token_to_metta['ka'] = '$𝜅'    # kappa (U+1D705, \mitkappa)
+        self.token_to_metta['ph'] = '$𝜑' if dv else '𝜑'   # phi (U+1D711, \mitphi)
+        self.token_to_metta['ps'] = '$𝜓' if dv else '𝜓'   # psi (U+1D713, \mitpsi)
+        self.token_to_metta['ch'] = '$𝜒' if dv else '𝜒'    # chi (U+1D712, \mitchi)
+        self.token_to_metta['th'] = '$𝜃' if dv else '𝜃'    # theta (U+1D703, \mittheta)
+        self.token_to_metta['ta'] = '$𝜏' if dv else '𝜏'    # tau (U+1D70F, \mittau)
+        self.token_to_metta['et'] = '$𝜂' if dv else '𝜂'    # eta (U+1D702, \miteta)
+        self.token_to_metta['ze'] = '$𝜁' if dv else '𝜁'    # zeta (U+1D701, \mitzeta)
+        self.token_to_metta['si'] = '$𝜎' if dv else '𝜎'    # sigma (U+1D70E, \mitsigma)
+        self.token_to_metta['rh'] = '$𝜌' if dv else '𝜌'    # rho (U+1D70C, \mitrho)
+        self.token_to_metta['mu'] = '$𝜇' if dv else '𝜇'    # mu (U+1D707, \mitmu)
+        self.token_to_metta['la'] = '$𝜆' if dv else '𝜆'    # lambda (U+1D706, \mitlambda)
+        self.token_to_metta['ka'] = '$𝜅' if dv else '𝜅'    # kappa (U+1D705, \mitkappa)
 
         # Logical connectors
         self.token_to_metta['/\\'] = '∧'    # and (U+2227, \wedge)
@@ -1317,4 +1319,4 @@ if __name__ == '__main__':
     # mm.dump()
 
     # Convert content of mm to MeTTa and write the result to stdout
-    sys.stdout.write(ToMeTTa(mm, True).to_metta())
+    sys.stdout.write(ToMeTTa(mm, True, False).to_metta())
