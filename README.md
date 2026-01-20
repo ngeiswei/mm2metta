@@ -30,6 +30,9 @@ target file where to write the conversion.  By default the arguments
 of the inference rules are in reversed order, because it can make
 proof search faster.  To switch off the reversing, go to mm2metta.py
 and look for the `reverse_argument_order` attribute of `ToMeTTa`.
+Likewise, by default variables are not prefixed by a dollar sign, in
+order to change that look for the `dollar_variable` attribute of
+`ToMeTTa`.
 
 ## Lisence
 
